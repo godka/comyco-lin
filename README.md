@@ -1,8 +1,8 @@
 # Comyco for linear-based QoE
 
-This is an official implmentation of Comyco for QoE$_{lin}$. Compared with the orignal Comyco, we made several changes here.
+This is an official implementation of Comyco for $QoE_\texttt{lin}$. Compared with the original Comyco, we made several changes here.
 
-- *Instant solver*: we upgrade the "MPC-based solver" to "Beam-search solver", which extend the future look horizon to **15** (default: 8). In other words, by leveraging beam search technologies, Comyco can obtain more precise expert strategies with lower execution costs.
+- *Instant solver*: we upgrade the "MPC-based solver" to "Beam-search solver", which extends the future look horizon to **15** (default: 8). In other words, by leveraging beam search technologies, Comyco can obtain more precise expert strategies with lower execution costs.
 
 - *Discounted bandwidth*: Considering that Comyco sometimes tends to pick higher bitrates due to the almost omniscient Instant Solver, we integrate a discount factor of 0.9 for computing bandwidth. This has proven to be effective in helping Comyco avoid rebuffering events.
 
@@ -12,7 +12,7 @@ This is an official implmentation of Comyco for QoE$_{lin}$. Compared with the o
 
 # Build by yourself
 
-We use pybind11 to implement beam-search solver. To install it please do the following steps:
+We use pybind11 to implement a beam-search solver. To install it please do the following steps:
 
 ```
 pip install pybind11
@@ -20,7 +20,7 @@ cd cc
 sh build.sh
 ```
 
-The pre-build version was built using Python 3.7.9, and runs on Ubuntu 20.04.
+The pre-build version was built using Python 3.7.9 and runs on Ubuntu 20.04.
 
 # Train Comyco
 
@@ -41,7 +41,7 @@ Just type
 python test.py path_to_your_model
 ```
 
-to test the trained model. Here we provide a pretrained model in 
+to test the trained model. Here we provide a pre-trained model in 
 
 ```
 python test.py pretrained/model
