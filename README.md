@@ -58,6 +58,24 @@ python plot.py
 
 Results are reported in 'imgs/cdf.png'. As shown, Comyco improves the average QoE of 6.5\% compared to Pensieve.
 
+
 <p align="center">
-    <img src="imgs/cdf.png" width="50%">
+    <img src="imgs/norway.png" alt="HSDPA" width="70%">
+</p>
+<p align="center">
+    <em>HSDPA</em>
+</p>
+<p align="center">
+    <img src="imgs/fcc.png" alt="FCC" width="70%">
+</p>
+
+<p align="center">
+    <em>FCC</em>
+</p>
+<p align="center">
+    <img src="imgs/oboe.png"  alt="Oboe" width="70%">
+</p>
+
+<p align="center">
+    <em>Oboe</em>
 </p>

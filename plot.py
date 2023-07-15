@@ -122,8 +122,8 @@ def main():
         rgb = (rr, gg, bb)
         return '#%02x%02x%02x' % rgb
 
-    colors = [rgb_to_hex(29, 29, 29), rgb_to_hex(237, 65, 29), rgb_to_hex(
-        255, 192, 0), rgb_to_hex(29, 29, 29), rgb_to_hex(0, 212, 97)]
+    colors = [rgb_to_hex(68, 166, 69), rgb_to_hex(47, 103, 223), rgb_to_hex(239, 117, 38), rgb_to_hex(
+    121, 90, 158), rgb_to_hex(34, 34, 34), rgb_to_hex(237, 65, 29)]
         
     for (scheme, color, line, label) in zip(SCHEMES, colors, lines, labels):
         values, base = np.histogram(reward_all[scheme], bins=NUM_BINS)
