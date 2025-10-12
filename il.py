@@ -6,61 +6,36 @@ FEATURE_NUM = 128
 ACTION_EPS = 1e-4
 
 
-class _ActorBackbone(nn.Module):
-    """Neural network that mirrors the original TensorFlow architecture."""
-
+class Actor(nn.Module):
+    
     def __init__(self, state_dim, action_dim):
         super().__init__()
-        s_info, s_len = state_dim
+        self.s_dim = state_dim
+        self.a_dim = action_dim
 
-        if s_info != 6:
-            raise ValueError(f"Expected state info dimension 6, got {s_info}")
+        self.fc1_actor = nn.Linear(1, FEATURE_NUM)
+        self.fc2_actor = nn.Linear(1, FEATURE_NUM)
+        self.conv1_actor = nn.Linear(self.s_dim[1], FEATURE_NUM)
+        self.conv2_actor = nn.Linear(self.s_dim[1], FEATURE_NUM)
+        self.conv3_actor = nn.Linear(self.a_dim, FEATURE_NUM)
+        self.fc3_actor = nn.Linear(1, FEATURE_NUM)
+        self.fc4_actor = nn.Linear(FEATURE_NUM * self.s_dim[0], FEATURE_NUM)
+        self.pi_head = nn.Linear(FEATURE_NUM, action_dim)
 
-        self.action_dim = action_dim
+    def forward(self, inputs):
+        split_0 = F.relu(self.fc1_actor(inputs[:, 0:1, -1]))
+        split_1 = F.relu(self.fc2_actor(inputs[:, 1:2, -1]))
+        split_2 = F.relu(self.conv1_actor(inputs[:, 2:3, :]).view(-1, FEATURE_NUM))
+        split_3 = F.relu(self.conv2_actor(inputs[:, 3:4, :]).view(-1, FEATURE_NUM))
+        split_4 = F.relu(self.conv3_actor(inputs[:, 4:5, :self.a_dim]).view(-1, FEATURE_NUM))
+        split_5 = F.relu(self.fc3_actor(inputs[:, 5:6, -1]))
 
-        # Fully connected branches for scalar features.
-        self.split_0 = nn.Linear(1, FEATURE_NUM)
-        self.split_1 = nn.Linear(1, FEATURE_NUM)
-        self.split_5 = nn.Linear(1, FEATURE_NUM)
+        merge_net = torch.cat([split_0, split_1, split_2, split_3, split_4, split_5], 1)
 
-        # Temporal branches for historical signals.
-        self.split_2 = nn.Conv1d(1, FEATURE_NUM, kernel_size=1)
-        self.split_3 = nn.Conv1d(1, FEATURE_NUM, kernel_size=1)
-        self.split_4 = nn.Conv1d(1, FEATURE_NUM, kernel_size=1)
-
-        # Merge layers.
-        merged_dim = FEATURE_NUM * 5  # three conv branches + two fc branches
-        merged_dim += FEATURE_NUM  # split_5 branch
-        self.merge_fc = nn.Linear(merged_dim, FEATURE_NUM)
-        self.out_fc = nn.Linear(FEATURE_NUM, action_dim)
-
-    def forward(self, x):
-        # x shape: (batch, 6, 8)
-        split_0_in = x[:, 0, -1].unsqueeze(-1)
-        split_1_in = x[:, 1, -1].unsqueeze(-1)
-        split_5_in = x[:, 5, -1].unsqueeze(-1)
-
-        split_2_in = x[:, 2:3, :]
-        split_3_in = x[:, 3:4, :]
-        split_4_in = x[:, 4:5, :self.action_dim]
-
-        split_0 = F.relu(self.split_0(split_0_in))
-        split_1 = F.relu(self.split_1(split_1_in))
-        split_5 = F.relu(self.split_5(split_5_in))
-
-        split_2 = F.relu(self.split_2(split_2_in))
-        split_3 = F.relu(self.split_3(split_3_in))
-        split_4 = F.relu(self.split_4(split_4_in))
-
-        split_2 = torch.flatten(split_2, start_dim=1)
-        split_3 = torch.flatten(split_3, start_dim=1)
-        split_4 = torch.flatten(split_4, start_dim=1)
-
-        merged = torch.cat([split_0, split_1, split_2, split_3, split_4, split_5], dim=1)
-        merged = F.relu(self.merge_fc(merged))
-        logits = self.out_fc(merged)
-        probs = F.softmax(logits, dim=1)
-        return probs
+        pi_net = F.relu(self.fc4_actor(merge_net))
+        pi = F.softmax(self.pi_head(pi_net), dim=-1)
+        pi = torch.clamp(pi, ACTION_EPS, 1. - ACTION_EPS)
+        return pi
 
 
 class Network:
@@ -69,7 +44,7 @@ class Network:
         self.action_dim = action_dim
         self.device = torch.device("cpu")
 
-        self.model = _ActorBackbone(state_dim, action_dim).to(self.device)
+        self.model = Actor(state_dim, action_dim).to(self.device)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
 
     def _prepare_state(self, state):
@@ -97,7 +72,7 @@ class Network:
 
         cross_entropy = -(actions * log_probs).sum(dim=1).mean()
         entropy = -(probs * log_probs).sum(dim=1).mean()
-        loss = cross_entropy + 0.2 * entropy
+        loss = cross_entropy + 0.15 * entropy
 
         self.optimizer.zero_grad()
         loss.backward()

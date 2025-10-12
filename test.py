@@ -45,7 +45,7 @@ def main():
                             learning_rate=ACTOR_LR_RATE)
     if NN_MODEL is not None:
         actor.load_model(NN_MODEL)
-        print("Testing model restored.")
+        # print("Testing model restored.")
 
     time_stamp = 0
 

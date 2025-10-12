@@ -1,1 +1,6 @@
 __pycache__/
+*.so
+core/build/
+test_results/*
+build/
+torch/

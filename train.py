@@ -2,7 +2,6 @@ import os
 import shutil
 import subprocess
 import sys
-from typing import Tuple
 
 import numpy as np
 import torch
@@ -34,7 +33,7 @@ os.makedirs(SUMMARY_DIR, exist_ok=True)
 NN_MODEL = None
 
 
-def testing(epoch: int, nn_model: str, log_file) -> Tuple[float, float]:
+def testing(epoch: int, nn_model: str, log_file):
     # clean up the test results folder
     if os.path.isdir(TEST_LOG_FOLDER):
         shutil.rmtree(TEST_LOG_FOLDER)

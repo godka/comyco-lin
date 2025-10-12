@@ -133,8 +133,8 @@ def main():
 
     ax.legend(framealpha=1,
               frameon=False, fontsize=16)
-    # ax.spines['right'].set_visible(False)
-    # ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
     plt.ylim(0., 1.)
     plt.xlim(-0.1, 2.5)
     plt.ylabel('CDF')
