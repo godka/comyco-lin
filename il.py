@@ -1,94 +1,116 @@
-import numpy as np
-import tensorflow.compat.v1 as tf
-import tflearn
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 FEATURE_NUM = 128
 ACTION_EPS = 1e-4
 
-class Network():
-    def CreateNetwork(self, inputs):
-        with tf.variable_scope('actor'):
-            split_0 = tflearn.fully_connected(inputs[:, 0:1, -1], FEATURE_NUM, activation='relu')
-            split_1 = tflearn.fully_connected(inputs[:, 1:2, -1], FEATURE_NUM, activation='relu')
-            split_2 = tflearn.conv_1d(inputs[:, 2:3, :], FEATURE_NUM, 1, activation='relu')
-            split_3 = tflearn.conv_1d(inputs[:, 3:4, :], FEATURE_NUM, 1, activation='relu')
-            split_4 = tflearn.conv_1d(inputs[:, 4:5, :self.a_dim], FEATURE_NUM, 1, activation='relu')
-            split_5 = tflearn.fully_connected(inputs[:, 5:6, -1], FEATURE_NUM, activation='relu')
 
-            split_2_flat = tflearn.flatten(split_2)
-            split_3_flat = tflearn.flatten(split_3)
-            split_4_flat = tflearn.flatten(split_4)
+class _ActorBackbone(nn.Module):
+    """Neural network that mirrors the original TensorFlow architecture."""
 
-            merge_net = tflearn.merge(
-                [split_0, split_1, split_2_flat, split_3_flat, split_4_flat, split_5], 'concat')
+    def __init__(self, state_dim, action_dim):
+        super().__init__()
+        s_info, s_len = state_dim
 
-            pi_net = tflearn.fully_connected(merge_net, FEATURE_NUM, activation='relu')
-            pi = tflearn.fully_connected(pi_net, self.a_dim, activation='softmax')
-        return pi
-            
-    def get_network_params(self):
-        return self.sess.run(self.network_params)
+        if s_info != 6:
+            raise ValueError(f"Expected state info dimension 6, got {s_info}")
 
-    def set_network_params(self, input_network_params):
-        self.sess.run(self.set_network_params_op, feed_dict={
-            i: d for i, d in zip(self.input_network_params, input_network_params)
-        })
+        self.action_dim = action_dim
 
-    def load_model(self, nn_model):
-        saver = tf.train.Saver(max_to_keep=1000)  # save neural net parameters
-        if nn_model is not None:  # nn_model is the path to file
-            saver.restore(self.sess, nn_model)
-            print("Model restored.")
-            
-    def __init__(self, sess, state_dim, action_dim, learning_rate):
-        self.s_dim = state_dim
-        self.a_dim = action_dim
-        self.H_target = 0.1
-        
-        self.lr_rate = learning_rate
-        self.sess = sess
-        self.inputs = tf.placeholder(tf.float32, [None, self.s_dim[0], self.s_dim[1]])
+        # Fully connected branches for scalar features.
+        self.split_0 = nn.Linear(1, FEATURE_NUM)
+        self.split_1 = nn.Linear(1, FEATURE_NUM)
+        self.split_5 = nn.Linear(1, FEATURE_NUM)
 
-        self.acts = tf.placeholder(tf.float32, [None, self.a_dim])
-        self.pi = self.CreateNetwork(inputs=self.inputs)
-        self.real_out = tf.clip_by_value(self.pi, ACTION_EPS, 1. - ACTION_EPS)
-        self.entropy = -tf.reduce_sum(tf.multiply(self.real_out, tf.log(self.real_out)), reduction_indices=1, keepdims=True)
-        
-        # Get all network parameters
-        self.network_params = \
-            tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='actor')
+        # Temporal branches for historical signals.
+        self.split_2 = nn.Conv1d(1, FEATURE_NUM, kernel_size=1)
+        self.split_3 = nn.Conv1d(1, FEATURE_NUM, kernel_size=1)
+        self.split_4 = nn.Conv1d(1, FEATURE_NUM, kernel_size=1)
 
-        # Set all network parameters
-        self.input_network_params = []
-        for param in self.network_params:
-            self.input_network_params.append(
-                tf.placeholder(tf.float32, shape=param.get_shape()))
-        self.set_network_params_op = []
-        for idx, param in enumerate(self.input_network_params):
-            self.set_network_params_op.append(
-                self.network_params[idx].assign(param))
-        
-        self.loss = tflearn.categorical_crossentropy(self.real_out, self.acts) \
-            + 0.2 * tf.reduce_mean(self.entropy)
-        self.opt = tf.train.AdamOptimizer(self.lr_rate).minimize(self.loss)
+        # Merge layers.
+        merged_dim = FEATURE_NUM * 5  # three conv branches + two fc branches
+        merged_dim += FEATURE_NUM  # split_5 branch
+        self.merge_fc = nn.Linear(merged_dim, FEATURE_NUM)
+        self.out_fc = nn.Linear(FEATURE_NUM, action_dim)
 
-        self.sess.run(tf.global_variables_initializer())
+    def forward(self, x):
+        # x shape: (batch, 6, 8)
+        split_0_in = x[:, 0, -1].unsqueeze(-1)
+        split_1_in = x[:, 1, -1].unsqueeze(-1)
+        split_5_in = x[:, 5, -1].unsqueeze(-1)
 
-    def predict(self, input):
-        input_ = np.reshape(input, [-1, self.s_dim[0], self.s_dim[1]])
-        action = self.sess.run(self.real_out, feed_dict={
-            self.inputs: input_
-        })
-        return action[0]
-    
-    def train(self, s_batch, a_batch):
-        self.sess.run([self.real_out, self.opt], feed_dict={
-            self.inputs: s_batch,
-            self.acts: a_batch
-        })
+        split_2_in = x[:, 2:3, :]
+        split_3_in = x[:, 3:4, :]
+        split_4_in = x[:, 4:5, :self.action_dim]
 
-    def save_model(self, nn_model='model'):
-        saver = tf.train.Saver(max_to_keep=1000)  # save neural net parameters
-        if nn_model is not None:  # nn_model is the path to file
-            saver.save(self.sess, nn_model)
-            print("Model saved.")
+        split_0 = F.relu(self.split_0(split_0_in))
+        split_1 = F.relu(self.split_1(split_1_in))
+        split_5 = F.relu(self.split_5(split_5_in))
+
+        split_2 = F.relu(self.split_2(split_2_in))
+        split_3 = F.relu(self.split_3(split_3_in))
+        split_4 = F.relu(self.split_4(split_4_in))
+
+        split_2 = torch.flatten(split_2, start_dim=1)
+        split_3 = torch.flatten(split_3, start_dim=1)
+        split_4 = torch.flatten(split_4, start_dim=1)
+
+        merged = torch.cat([split_0, split_1, split_2, split_3, split_4, split_5], dim=1)
+        merged = F.relu(self.merge_fc(merged))
+        logits = self.out_fc(merged)
+        probs = F.softmax(logits, dim=1)
+        return probs
+
+
+class Network:
+    def __init__(self, state_dim, action_dim, learning_rate):
+        self.state_dim = state_dim
+        self.action_dim = action_dim
+        self.device = torch.device("cpu")
+
+        self.model = _ActorBackbone(state_dim, action_dim).to(self.device)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
+
+    def _prepare_state(self, state):
+        tensor = torch.from_numpy(state).float().to(self.device)
+        if tensor.dim() == 2:
+            tensor = tensor.unsqueeze(0)
+        return tensor
+
+    def predict(self, state):
+        self.model.eval()
+        with torch.no_grad():
+            tensor = self._prepare_state(state)
+            probs = self.model(tensor)
+        return probs.cpu().numpy()[0]
+
+    def train_step(self, s_batch, a_batch):
+        self.model.train()
+
+        states = self._prepare_state(s_batch)
+        actions = torch.from_numpy(a_batch).float().to(self.device)
+
+        probs = self.model(states)
+        probs = torch.clamp(probs, ACTION_EPS, 1.0 - ACTION_EPS)
+        log_probs = torch.log(probs)
+
+        cross_entropy = -(actions * log_probs).sum(dim=1).mean()
+        entropy = -(probs * log_probs).sum(dim=1).mean()
+        loss = cross_entropy + 0.2 * entropy
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return loss.item(), entropy.item()
+
+    def save_model(self, path):
+        torch.save({"model_state_dict": self.model.state_dict()}, path)
+        return path
+
+    def load_model(self, path):
+        checkpoint = torch.load(path, map_location=self.device)
+        state_dict = checkpoint.get("model_state_dict", checkpoint)
+        self.model.load_state_dict(state_dict)
+

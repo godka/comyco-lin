@@ -7,41 +7,48 @@ This is an official implementation of Comyco for $QoE_\texttt{lin}$. Compared wi
 - *Discounted bandwidth*: Considering that Comyco sometimes tends to pick higher bitrates due to the almost omniscient Instant Solver, we integrate a discount factor of 0.9 for computing bandwidth. This has proven to be effective in helping Comyco avoid rebuffering events.
 
 - *Neural network*: For the sack of fairness, Comyco's neural network is aligned with the Pensieve's.
+- *Framework update*: The learning pipeline has been migrated from TensorFlow/TFLearn to PyTorch.
 
 - *Loss function*: We adjust the weight of entropy to 0.1 for reducing exploration. Note that this differs slightly from the description in the original paper.
 
 # Build by yourself
 
-We use pybind11 to implement a beam-search solver. To install it please do the following steps:
+We use pybind11 to implement a beam-search solver. Build the native extension with setuptools:
 
 ```
-pip install pybind11
-cd cc
-sh build.sh
+pip install pybind11 setuptools
+python core/setup.py build_ext --inplace
 ```
 
-The pre-build version was built using Python 3.7.9 and runs on Ubuntu 20.04.
+This will produce a `libcore` module in the repository root that is compatible with the PyTorch
+training pipeline. The pre-build version was built using Python 3.7.9 and runs on Ubuntu 20.04.
 
 # Train Comyco
 
-Just type 
+Training now relies on PyTorch. After installing the dependencies (PyTorch, NumPy and tqdm), launch
+the training loop with:
 
 ```
 python train.py
 ```
 
-if you have already installed *Tensorflow, TFlearn and tqdm*.
-You can monitor the learning process during training using Tensorboard. We have saved one of the training logs in the *./logs/* directory.
+TensorBoard summaries are written to `./comyco`, so you can monitor learning with:
+
+```
+tensorboard --logdir comyco
+```
+
+We have saved one of the training logs in the `./logs/` directory for reference.
 
 # Test Comyco
 
-Just type
+Run the evaluation script against a PyTorch checkpoint:
 
 ```
 python test.py path_to_your_model
 ```
 
-to test the trained model. Here we provide a pre-trained model in 
+We provide a pre-trained model for convenience:
 
 ```
 python test.py pretrained/model
